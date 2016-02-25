@@ -4,6 +4,7 @@ import org.apache.activemq.ActiveMQConnection;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
 import javax.jms.*;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -12,10 +13,10 @@ public class EchoProducer implements MessageListener {
     private Connection connection;
     private Session session;
     private MessageProducer messageProducer;
-    Map<String, MessageHolder> map;
+    private Map<String, MessageHolder> map;
 
-    public EchoProducer(Map<String, MessageHolder> map) {
-        this.map = map;
+    public EchoProducer() {
+        map = new HashMap<>();
     }
 
     public void start() throws JMSException {
@@ -45,17 +46,16 @@ public class EchoProducer implements MessageListener {
     @Override
     public void onMessage(Message message) {
         try {
-            Thread.sleep(30);
+            Thread.sleep(25);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        System.out.println(Thread.currentThread().getName() + " oh hi!");
+        System.out.println(Thread.currentThread().getName() + " onMessage");
         ObjectMessage objectMessage = (ObjectMessage) message;
         try {
-            String msg = (String) objectMessage.getObject();
-            if (map.containsKey(message.getJMSCorrelationID())) {
-                MessageHolder holder = map.remove(message.getJMSCorrelationID());
-                holder.setMessage(msg);
+            if (map.containsKey(objectMessage.getJMSCorrelationID())) {
+                MessageHolder holder = map.remove(objectMessage.getJMSCorrelationID());
+                holder.setMessage(objectMessage);
                 synchronized (holder) {
                     holder.notify();
                 }
@@ -65,12 +65,16 @@ public class EchoProducer implements MessageListener {
         }
     }
 
-    public void sendMessage(String message, MessageHolder holder) throws JMSException {
+    public ObjectMessage createMessage(String message) throws JMSException {
         ObjectMessage objectMessage = session.createObjectMessage(message);
-        String correlationId = UUID.randomUUID().toString();
-        System.out.println(Thread.currentThread().getName() + " : " + message);
-        objectMessage.setJMSCorrelationID(correlationId);
-        map.put(correlationId, holder);
+        String msgId = UUID.randomUUID().toString();
+        objectMessage.setJMSCorrelationID(msgId);
+        return objectMessage;
+    }
+
+    public void sendMessage(ObjectMessage objectMessage, MessageHolder holder) throws JMSException {
+        System.out.println(Thread.currentThread().getName() + " sendMessage");
+        map.put(objectMessage.getJMSCorrelationID(), holder);
         // send the message to the queue destination
         messageProducer.send(objectMessage);
     }

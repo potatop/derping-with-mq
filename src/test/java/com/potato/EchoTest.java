@@ -8,13 +8,16 @@ import org.junit.Test;
 
 import javax.jms.*;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.*;
 
 public class EchoTest {
     private static Connection connection;
-    private ConcurrentHashMap<String, MessageHolder> dataMap = new ConcurrentHashMap<>();
 
     @BeforeClass
     public static void setUpBeforeClass() throws JMSException {
@@ -38,18 +41,26 @@ public class EchoTest {
 
     @Test
     public void testSendMessage() throws Exception {
-        EchoProducer echoProducer = new EchoProducer(dataMap);
+        EchoProducer echoProducer = new EchoProducer();
         echoProducer.start();
+        Map<String, String> inquires = new HashMap<>();
+        Map<String, String> replies = new HashMap<>();
 
-        Thread thread1 = new Thread(new Snake(echoProducer), "Thread-1");
-        Thread thread2 = new Thread(new Snake(echoProducer), "Thread-2");
-        thread1.start();
-        thread2.start();
+        ArrayList<Thread> threads = new ArrayList<>();
+        for (int i = 0; i < 500; i++) {
+            Thread thread = new Thread(new Snake(echoProducer, inquires, replies), "Thread-" + (i + 1));
+            thread.start();
+            threads.add(thread);
+        }
 
-        thread1.join();
-        thread2.join();
-        echoProducer.stop();
+        for (Thread thread : threads)
+        {
+            thread.join();
+        }
+        for (String id : inquires.keySet())
+        {
+            assertThat(inquires.get(id), is(new StringBuilder(replies.get(id)).reverse().toString()));
+        }
 
-        System.out.print(dataMap);
     }
 }
